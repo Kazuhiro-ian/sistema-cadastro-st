@@ -1,19 +1,20 @@
 package supertrans.model;
 
-public class EmpresaEstrangeira extends Empresa{
+public class EmpresaEstrangeira extends Empresa {
+
+    // Atributos específicos de uma empresa internacional
     private String razaoSocial;
     private String identificadorEstrangeiro;
 
-    //Construtor
-    public EmpresaEstrangeira (String nomeFantasia, PerfilEnum perfil, boolean faturamentoDireto, String documentoAnexo, boolean aprovado, String razaoSocial, String identificadorEstrangeiro) {
+    public EmpresaEstrangeira(String nomeFantasia, PerfilEnum perfil, boolean faturamentoDireto, String documentoAnexo, boolean aprovado, String razaoSocial, String identificadorEstrangeiro) {
         super(nomeFantasia, perfil, faturamentoDireto, documentoAnexo, aprovado);
-
         this.razaoSocial = razaoSocial;
         this.identificadorEstrangeiro = identificadorEstrangeiro;
     }
 
-    //Getters e setters
-
+    /* ====================================================================
+     * GETTERS E SETTERS (Encapsulamento Específico)
+     * ==================================================================== */
 
     public String getRazaoSocial() {
         return razaoSocial;

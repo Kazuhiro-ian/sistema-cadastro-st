@@ -1,5 +1,6 @@
 package supertrans.service;
 
+import supertrans.database.ConexaoBanco;
 import supertrans.model.Empresa;
 import supertrans.model.EmpresaEstrangeira;
 import supertrans.model.EmpresaFisica;
@@ -11,24 +12,40 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+/**
+ * Classe de serviço responsável pelas operações de persistência e regras de negócio
+ * relacionadas às entidades corporativas.
+ * Atua como a camada intermediária entre a interface do usuário (Main) e a
+ * camada de acesso a dados (PostgreSQL).
+ */
 public class EmpresaService {
 
+    /**
+     * Gerencia o salvamento completo de uma empresa no banco de dados.
+     * Utiliza a estratégia de "Tabelas Separadas" (Joined Strategy), realizando
+     * o INSERT primeiro na tabela principal (empresa) e, utilizando o ID gerado,
+     * realiza um segundo INSERT na tabela específica da entidade filha.
+     *
+     * @param empresa Objeto polimórfico representando a empresa (Física, Jurídica ou Estrangeira).
+     */
     public void salvarEmpresa(Empresa empresa) {
         // Comando SQL para a tabela principal
         String sqlEmpresa = "INSERT INTO empresa (nome_fantasia, perfil, faturamento_direto, documento_anexo, aprovado, tipo_empresa) VALUES (?, ?, ?, ?, ?, ?)";
 
-        // O try-with-resources já abre e fecha a conexão automaticamente de forma segura
+        // try-with-resources: Garante que a conexão e o PreparedStatement sejam fechados automaticamente
         try (Connection conn = ConexaoBanco.conectar();
              PreparedStatement pstmtEmpresa = conn.prepareStatement(sqlEmpresa, Statement.RETURN_GENERATED_KEYS)) {
 
-            // 1. Preenchendo os dados da tabela mãe
+            /* ============================================================
+             * ETAPA 1: SALVANDO OS DADOS COMUNS NA TABELA MÃE
+             * ============================================================ */
             pstmtEmpresa.setString(1, empresa.getNomeFantasia());
-            pstmtEmpresa.setString(2, empresa.getPerfil().name()); // Salva o nome do Enum (ex: FORNECEDOR)
+            pstmtEmpresa.setString(2, empresa.getPerfil().name()); // Salva a representação String do Enum
             pstmtEmpresa.setBoolean(3, empresa.isFaturamentoDireto());
             pstmtEmpresa.setString(4, empresa.getDocumentoAnexo());
             pstmtEmpresa.setBoolean(5, empresa.isAprovado());
 
-            // Descobrindo qual é o tipo da empresa para salvar no banco
+            // Identifica dinamicamente o tipo da classe para gravar a sigla no banco
             String tipo = "";
             if (empresa instanceof EmpresaJuridica) tipo = "PJ";
             else if (empresa instanceof EmpresaFisica) tipo = "PF";
@@ -36,15 +53,17 @@ public class EmpresaService {
 
             pstmtEmpresa.setString(6, tipo);
 
-            // Executa o insert na tabela mãe
+            // Executa a inserção na tabela principal
             pstmtEmpresa.executeUpdate();
 
-            // 2. Pegando o ID que o PostgreSQL acabou de gerar
+            /* ============================================================
+             * ETAPA 2: RECUPERANDO O ID E SALVANDO NA TABELA FILHA
+             * ============================================================ */
             ResultSet rs = pstmtEmpresa.getGeneratedKeys();
             if (rs.next()) {
-                int idGerado = rs.getInt(1);
+                int idGerado = rs.getInt(1); // Captura o ID (Primary Key) gerado pelo PostgreSQL
 
-                // 3. Salvando os dados específicos na tabela filha correta
+                // Direciona para o método auxiliar correspondente ao tipo de empresa
                 if (empresa instanceof EmpresaJuridica) {
                     salvarPJ(conn, idGerado, (EmpresaJuridica) empresa);
                 } else if (empresa instanceof EmpresaFisica) {
@@ -54,15 +73,21 @@ public class EmpresaService {
                 }
             }
 
-            System.out.println("✅ supertrans.model.Empresa '" + empresa.getNomeFantasia() + "' salva com sucesso no Banco de Dados!");
+            // Feedback visual limpo e profissional
+            System.out.println("Empresa '" + empresa.getNomeFantasia() + "' salva com sucesso no Banco de Dados!");
 
         } catch (SQLException e) {
-            System.out.println("❌ Erro ao salvar no banco: " + e.getMessage());
+            System.out.println("Erro ao salvar no banco de dados: " + e.getMessage());
         }
     }
 
-    // --- MÉTODOS AUXILIARES PARA AS TABELAS FILHAS ---
+    /* ====================================================================
+     * MÉTODOS AUXILIARES DE PERSISTÊNCIA (Privados)
+     * ==================================================================== */
 
+    /**
+     * Salva os dados específicos de uma Pessoa Jurídica usando o ID da tabela mãe.
+     */
     private void salvarPJ(Connection conn, int idEmpresa, EmpresaJuridica pj) throws SQLException {
         String sql = "INSERT INTO empresa_juridica (id_empresa, razao_social, cnpj) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -73,6 +98,9 @@ public class EmpresaService {
         }
     }
 
+    /**
+     * Salva os dados específicos de uma Pessoa Física usando o ID da tabela mãe.
+     */
     private void salvarPF(Connection conn, int idEmpresa, EmpresaFisica pf) throws SQLException {
         String sql = "INSERT INTO empresa_fisica (id_empresa, nome, cpf) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -83,6 +111,9 @@ public class EmpresaService {
         }
     }
 
+    /**
+     * Salva os dados específicos de uma Empresa Estrangeira usando o ID da tabela mãe.
+     */
     private void salvarEE(Connection conn, int idEmpresa, EmpresaEstrangeira ee) throws SQLException {
         String sql = "INSERT INTO empresa_estrangeira (id_empresa, razao_social, identificador_estrangeiro) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -93,9 +124,15 @@ public class EmpresaService {
         }
     }
 
-    // Método para listar as empresas buscando direto do PostgreSQL
+    /* ====================================================================
+     * MÉTODOS DE LEITURA (Listagem)
+     * ==================================================================== */
+
+    /**
+     * Consulta o banco de dados e exibe no console uma lista formatada
+     * de todas as empresas cadastradas na tabela principal.
+     */
     public void listarEmpresas() {
-        // Comando SQL para buscar os dados na tabela mãe
         String sql = "SELECT nome_fantasia, perfil, aprovado, tipo_empresa FROM empresa";
 
         System.out.println("\n--- Lista de Empresas Cadastradas no Banco ---");
@@ -106,26 +143,26 @@ public class EmpresaService {
 
             boolean temDados = false;
 
-            // O rs.next() vai passando linha por linha no resultado do banco
+            // Percorre todas as linhas retornadas pelo banco de dados
             while (rs.next()) {
-                temDados = true; // Achamos pelo menos uma empresa
+                temDados = true;
 
-                // Pegando as colunas daquela linha
+                // Extração dos dados da linha atual
                 String nomeFantasia = rs.getString("nome_fantasia");
                 String perfil = rs.getString("perfil");
                 boolean aprovado = rs.getBoolean("aprovado");
                 String tipoSigla = rs.getString("tipo_empresa");
 
-                // Traduzindo a sigla que salvamos no banco para o nome bonitinho
+                // Tradução da sigla salva no banco para um formato amigável ao usuário
                 String tipoNome = "";
                 switch (tipoSigla) {
-                    case "PJ": tipoNome = "supertrans.model.EmpresaJuridica"; break;
-                    case "PF": tipoNome = "supertrans.model.EmpresaFisica"; break;
-                    case "EE": tipoNome = "supertrans.model.EmpresaEstrangeira"; break;
+                    case "PJ": tipoNome = "Empresa Jurídica"; break;
+                    case "PF": tipoNome = "Empresa Física"; break;
+                    case "EE": tipoNome = "Empresa Estrangeira"; break;
                     default: tipoNome = "Desconhecido"; break;
                 }
 
-                // Imprimindo exatamente como você fazia antes
+                // Impressão formatada
                 System.out.println("Tipo: " + tipoNome);
                 System.out.println("Nome Fantasia: " + nomeFantasia);
                 System.out.println("Perfil: " + perfil);
@@ -137,9 +174,8 @@ public class EmpresaService {
             if (!temDados) {
                 System.out.println("Nenhuma empresa cadastrada no momento.");
             }
-
         } catch (SQLException e) {
-            System.out.println("❌ Erro ao buscar dados no banco: " + e.getMessage());
+            System.out.println("Erro ao buscar dados no banco: " + e.getMessage());
         }
     }
 }

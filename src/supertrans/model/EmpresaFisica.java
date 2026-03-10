@@ -1,17 +1,25 @@
 package supertrans.model;
 
-public class EmpresaFisica extends Empresa{
+public class EmpresaFisica extends Empresa {
+
+    // Atributos específicos da Pessoa Física
     private String nome;
     private String cpf;
 
-    //Construtor
-    public EmpresaFisica (String nomeFantasia, PerfilEnum perfil, boolean faturamentoDireto, String documentoAnexo, boolean aprovado, String nome, String cpf) {
+    public EmpresaFisica(String nomeFantasia, PerfilEnum perfil, boolean faturamentoDireto, String documentoAnexo, boolean aprovado, String nome, String cpf) {
+
+        // Repassa os atributos base para a classe abstrata Empresa
         super(nomeFantasia, perfil, faturamentoDireto, documentoAnexo, aprovado);
+
         this.nome = nome;
+
+        // Chama o setter para garantir que a validação de 11 dígitos ocorra já na criação do objeto
         setCpf(cpf);
     }
 
-    //Setter e Getters
+    /* ====================================================================
+     * GETTERS E SETTERS COM REGRAS DE NEGÓCIO
+     * ==================================================================== */
 
     public String getNome() {
         return nome;
@@ -26,10 +34,12 @@ public class EmpresaFisica extends Empresa{
     }
 
     public void setCpf(String cpf) {
-        if(cpf != null && cpf.length() == 11){
+        // Regra de negócio corporativa: O CPF não pode ser nulo e deve ter exatamente 11 dígitos.
+        if (cpf != null && cpf.length() == 11) {
             this.cpf = cpf;
         } else {
-            throw new IllegalArgumentException("CPF inválido");
+            // Lança uma exceção clara explicando o motivo da recusa
+            throw new IllegalArgumentException("CPF inválido! O documento deve conter exatamente 11 números.");
         }
     }
 }
